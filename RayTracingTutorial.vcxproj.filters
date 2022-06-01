@@ -54,9 +54,6 @@
     <ClCompile Include="Lambertian.ixx">
       <Filter>Source Files\Material</Filter>
     </ClCompile>
-    <ClCompile Include="CudaUtils.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
     <ClCompile Include="Camera.ixx">
       <Filter>Source Files\Rendering</Filter>
     </ClCompile>
@@ -83,103 +80,8 @@
     <ClInclude Include="Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RayTracing.cuh">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="CudaUtils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rendercheck_gles.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="dynlink_d3d10.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="dynlink_d3d11.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="exception.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_cuda.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_cuda_drvapi.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_cusolver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_functions.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_gl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_image.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_math.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_multiprocess.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_nvJPEG.hxx">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_string.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="helper_timer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="multithreading.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvMath.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvMatrix.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvQuaternion.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvrtc_helper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvShaderUtils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="nvVector.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="param.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="paramgl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rendercheck_d3d9.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rendercheck_d3d10.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rendercheck_d3d11.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rendercheck_gl.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IMaterial.h">
       <Filter>Source Files\Material</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="RayTracing.cu">
-      <Filter>Source Files\Rendering</Filter>
-    </CudaCompile>
   </ItemGroup>
 </Project>

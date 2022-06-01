@@ -14,22 +14,10 @@ module;
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#include <cuda_runtime.h>
-
-#include <helper_functions.h> // helper utility functions 
-#include <helper_cuda.h>      // helper functions for CUDA error checking and initialization
-#include <helper_math.h>
-
 #include "Common.h"
 
 #define CPU_SINGLE_THREAD (0)
 #define CPU_MULTI_THREAD (1)
-#define GPU_CUDA (0)
-
-#if GPU_CUDA
-#include "CudaUtils.h"
-#include "RayTracing.cuh"
-#endif
 
 #include "IMaterial.h"
 
@@ -54,7 +42,7 @@ static std::mutex sMutex;
 export class RayTracer final
 {
 public:
-	static constexpr const size_t MAX_BOUND_DEPTH = 50;
+	static constexpr const size_t MAX_BOUND_DEPTH = 5;
 
 	static Color RayColor(const Ray& ray, const IHittable& world, size_t depth = MAX_BOUND_DEPTH) noexcept;
 
@@ -70,12 +58,9 @@ public:
 	void Initialize() noexcept;
 	void Render() noexcept;
 
-	static constexpr const size_t SAMPLES_PER_PIXEL = 100;
+	static constexpr const size_t SAMPLES_PER_PIXEL = 10;
 
 private:
-#if GPU_CUDA
-	bool initializeCuda(GPU_SELECT_MODE mode, int32_t specifiedDeviceId) noexcept;
-#endif
 	static void renderSingleRow(uint8_t* backBuffer, size_t width, size_t height, size_t numChannels, size_t y, const Camera& camera, const HittableList& world) noexcept;
 	static void renderSinglePixel(uint8_t* backBuffer, size_t width, size_t height, size_t numChannels, size_t x, size_t y, const Camera& camera, const HittableList& world) noexcept;
 
@@ -87,9 +72,6 @@ private:
 	size_t mHeight;
 	size_t mNumChannels;
 	uint8_t* mHostBackBuffer;
-#if GPU_CUDA
-	uint8_t* mDeviceBackBuffer;
-#endif
 
 	// Camera
 	Camera mCamera;
@@ -99,16 +81,6 @@ private:
 	// World
 	HittableList mWorld;
 	std::vector<IMaterial*> mMaterials;
-
-#if GPU_CUDA
-	// Cuda
-	int32_t mCudaSelectedDeviceId;
-	GPU_INFO mGpuInfo;
-	BOOL mbCanPrefetch;
-	CudaSphere* mHostSpheres;
-	CudaSphere* mDeviceSpheres;
-	size_t mNumSpheres;
-#endif
 
 #if CPU_MULTI_THREAD
 	// Multi-Threading
@@ -149,19 +121,10 @@ RayTracer::RayTracer(size_t width, size_t height, size_t numChannels) noexcept
 	, mHeight(height)
 	, mNumChannels(numChannels)
 	, mHostBackBuffer(reinterpret_cast<uint8_t*>(malloc(mWidth* mHeight* mNumChannels * sizeof(mHostBackBuffer[0]))))
-#if GPU_CUDA
-	, mDeviceBackBuffer(nullptr)
-#endif
 	, mCamera(Point3f(13.0f, 2.0f, 3.0f), Point3f(0.0f, 0.0f, 0.0f), Point3f(0.0f, 1.0f, 0.0f), 10.0f, 3.0f / 2.0f, 0.1f, 10.0f)
 	, mWorld()
 {
 	assert(mHostBackBuffer);
-
-#if GPU_CUDA
-	cudaMalloc(reinterpret_cast<void**>(&mDeviceBackBuffer), mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-
-	assert(mDeviceBackBuffer);
-#endif
 }
 
 RayTracer::RayTracer(const RayTracer& other) noexcept
@@ -177,13 +140,6 @@ RayTracer::RayTracer(const RayTracer& other) noexcept
 
 		memcpy(mHostBackBuffer, other.mHostBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
 
-#if GPU_CUDA
-		cudaMalloc(reinterpret_cast<void**>(&mDeviceBackBuffer), mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-		assert(mDeviceBackBuffer);
-
-		cudaMemcpy(mDeviceBackBuffer, other.mDeviceBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]), cudaMemcpyDeviceToDevice);
-#endif
-
 		mCamera = other.mCamera;
 
 		mWorld = other.mWorld;
@@ -198,9 +154,7 @@ RayTracer::RayTracer(RayTracer&& other) noexcept
 		mHeight = other.mHeight;
 		mNumChannels = other.mNumChannels;
 		mHostBackBuffer = other.mHostBackBuffer;
-#if GPU_CUDA
-		mDeviceBackBuffer = other.mDeviceBackBuffer;
-#endif
+
 		mCamera = std::move(other.mCamera);
 		mWorld = std::move(other.mWorld);
 
@@ -208,9 +162,6 @@ RayTracer::RayTracer(RayTracer&& other) noexcept
 		other.mHeight = 0;
 		other.mNumChannels = 0;
 		other.mHostBackBuffer = nullptr;
-#if GPU_CUDA
-		other.mDeviceBackBuffer = nullptr;
-#endif
 	}
 }
 
@@ -225,30 +176,16 @@ RayTracer& RayTracer::operator=(const RayTracer& other) noexcept
 				free(mHostBackBuffer);
 			}
 
-#if GPU_CUDA
-			if (mDeviceBackBuffer)
-			{
-				cudaFree(mDeviceBackBuffer);
-			}
-#endif
-
 			mWidth = other.mWidth;
 			mHeight = other.mHeight;
 			mNumChannels = other.mNumChannels;
 
 			mHostBackBuffer = reinterpret_cast<uint8_t*>(malloc(mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0])));
 			assert(mHostBackBuffer);
-
-#if GPU_CUDA
-			cudaMalloc(reinterpret_cast<void**>(&mDeviceBackBuffer), mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-			assert(mDeviceBackBuffer);
-#endif
 		}
 
 		memcpy(mHostBackBuffer, other.mHostBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-#if GPU_CUDA
-		cudaMemcpy(mDeviceBackBuffer, other.mDeviceBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]), cudaMemcpyDeviceToDevice);
-#endif
+
 		mCamera = other.mCamera;
 
 		mWorld = other.mWorld;
@@ -265,9 +202,6 @@ constexpr RayTracer& RayTracer::operator=(RayTracer&& other) noexcept
 		mHeight = other.mHeight;
 		mNumChannels = other.mNumChannels;
 		mHostBackBuffer = other.mHostBackBuffer;
-#if GPU_CUDA
-		mDeviceBackBuffer = other.mDeviceBackBuffer;
-#endif
 
 		mCamera = std::move(other.mCamera);
 		mWorld = std::move(other.mWorld);
@@ -276,9 +210,6 @@ constexpr RayTracer& RayTracer::operator=(RayTracer&& other) noexcept
 		other.mHeight = 0;
 		other.mNumChannels = 0;
 		other.mHostBackBuffer = nullptr;
-#if GPU_CUDA
-		other.mDeviceBackBuffer = nullptr;
-#endif
 	}
 
 	return *this;
@@ -296,62 +227,12 @@ RayTracer::~RayTracer() noexcept
 	{
 		free(mHostBackBuffer);
 	}
-
-#if GPU_CUDA
-	if (mDeviceBackBuffer)
-	{
-		cudaFree(reinterpret_cast<void*>(mDeviceBackBuffer));
-	}
-
-	if (mDeviceSpheres)
-	{
-		cudaFree(mDeviceSpheres);
-	}
-
-	if (mHostSpheres)
-	{
-		free(mHostSpheres);
-	}
-
-	cudaError_t cudaStatus = cudaDeviceReset();
-	if (cudaStatus != cudaSuccess)
-	{
-		std::cerr << "cudaDeviceReset failed!" << std::endl;
-		assert(false);
-	}
-#endif
 }
 
 void RayTracer::Initialize() noexcept
 {
-#if GPU_CUDA
-	assert(initializeCuda(SPECIFIED_DEVICE_ID, 0));
-	CudaCamera camera =
-	{
-		.at = make_float3(mCamera.GetPosition().X, mCamera.GetPosition().Y, mCamera.GetPosition().Z),
-		.horizontal = make_float3(mCamera.GetHorizontal().X, mCamera.GetHorizontal().Y, mCamera.GetHorizontal().Z),
-		.vertical = make_float3(mCamera.GetVertical().X, mCamera.GetVertical().Y, mCamera.GetVertical().Z),
-		.lowerLeftCorner = make_float3(mCamera.GetLowerLeftCorner().X, mCamera.GetLowerLeftCorner().Y, mCamera.GetLowerLeftCorner().Z)
-	};
-
-	CudaInitialize(&camera);
-#endif
-
 	// World
 	createRandomScene(mWorld, mMaterials);
-
-#if GPU_CUDA
-	mNumSpheres = 2;
-
-	mHostSpheres = reinterpret_cast<CudaSphere*>(malloc(mNumSpheres * sizeof(CudaSphere)));
-	mHostSpheres[0].center = make_float3(0.0f, 0.0f, -1.0f);
-	mHostSpheres[0].radius = 0.5f;
-	mHostSpheres[1].center = make_float3(0.0f, -100.5f, -1.0f);
-	mHostSpheres[1].radius = 100.0f;
-
-	cudaMalloc(reinterpret_cast<void**>(&mDeviceSpheres), mNumSpheres * sizeof(CudaSphere));
-	cudaMemcpy(mDeviceSpheres, mHostSpheres, mNumSpheres * sizeof(CudaSphere), cudaMemcpyHostToDevice);
-#endif
 }
 
 void RayTracer::Render() noexcept
@@ -417,183 +298,7 @@ void RayTracer::Render() noexcept
 
 	std::cerr << "\nDone. Multi-Threaded CPU Ray Tracing took: " << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count()) / 1000000000.0 << " seconds" << std::endl;
 #endif
-
-#if GPU_CUDA
-	begin = std::chrono::steady_clock::now();
-	CudaRender(mDeviceBackBuffer, mWidth, mHeight, mNumChannels, SAMPLES_PER_PIXEL, mDeviceSpheres, mNumSpheres);
-
-	cudaMemcpy(mHostBackBuffer, mDeviceBackBuffer, mWidth * mHeight * mNumChannels, cudaMemcpyDeviceToHost);
-	end = std::chrono::steady_clock::now();
-
-	stbi_write_png(
-		"example_gpu.png", 
-		static_cast<int>(mWidth), 
-		static_cast<int>(mHeight), 
-		static_cast<int>(mNumChannels), 
-		mHostBackBuffer, 
-		static_cast<int>(mWidth * mNumChannels)
-	);
-
-	std::cerr << "\nDone. CUDA GPU Ray Tracing took: " << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count()) / 1000000000.0 << " seconds" << std::endl;
-#endif
 }
-
-#if GPU_CUDA
-bool RayTracer::initializeCuda(GPU_SELECT_MODE mode, int32_t specifiedDeviceId) noexcept
-{
-	bool bResult = false;
-
-	int32_t deviceCount = 0;
-
-	if (cudaSuccess != cudaGetDeviceCount(&deviceCount))
-	{
-		return bResult;
-	}
-
-	struct CudaDeviceProperty
-	{
-		cudaDeviceProp prop;
-		int32_t DeviceId;
-	};
-
-	enum eCudaDeviceType
-	{
-		CUDA_DEVICE_FIRST_PCI_BUS_ID,
-		CUDA_DEVICE_LAST_PCI_BUS_ID,
-		CUDA_DEVICE_MAX_GFLOPS,
-		CUDA_DEVICE_MIN_GFLOPS,
-		CUDA_DEVICE_SPECIFIED
-	};
-	constexpr const uint32_t CUDA_DEVICE_TYPE_NUM = 5;
-	CudaDeviceProperty deviceProperties[CUDA_DEVICE_TYPE_NUM] = {};
-
-	for (uint32_t i = 0; i < CUDA_DEVICE_TYPE_NUM; ++i)
-	{
-		deviceProperties[i].DeviceId = -1;
-	}
-
-	if (deviceCount == 0)
-	{
-		return bResult;
-	}
-
-	int32_t lastPciBusId = -1;
-	int32_t firstPciBusId = INT32_MAX;
-	int32_t maxGFlops = -1;
-	int32_t minGFlops = INT32_MAX;
-
-	cudaDeviceProp prop;
-	for (int32_t i = 0; i < deviceCount; ++i)
-	{
-		if (cudaSuccess != cudaGetDeviceProperties(&prop, i))
-		{
-			__debugbreak();
-		}
-
-		if (prop.major < 2)
-		{
-			continue;
-		}
-
-		if (i == specifiedDeviceId)
-		{
-			deviceProperties[CUDA_DEVICE_SPECIFIED].prop = prop;
-			deviceProperties[CUDA_DEVICE_SPECIFIED].DeviceId = i;
-		}
-
-		if (prop.pciBusID > lastPciBusId)
-		{
-			lastPciBusId = prop.pciBusID;
-			deviceProperties[CUDA_DEVICE_LAST_PCI_BUS_ID].prop = prop;
-			deviceProperties[CUDA_DEVICE_LAST_PCI_BUS_ID].DeviceId = i;
-		}
-
-		if (prop.pciBusID > firstPciBusId)
-		{
-			firstPciBusId = prop.pciBusID;
-			deviceProperties[CUDA_DEVICE_FIRST_PCI_BUS_ID].prop = prop;
-			deviceProperties[CUDA_DEVICE_FIRST_PCI_BUS_ID].DeviceId = i;
-		}
-
-		float ClockRate = static_cast<float>(prop.clockRate) / (1000.0f * 1000.0f);
-		int32_t SmPerMultiproc = _ConvertSMVer2Cores(prop.major, prop.minor);
-		float GFlops = static_cast<float>(prop.multiProcessorCount * SmPerMultiproc) * ClockRate * 2.0f;
-
-		if (GFlops > static_cast<float>(maxGFlops))
-		{
-			maxGFlops = static_cast<int32_t>(GFlops);
-			deviceProperties[CUDA_DEVICE_MAX_GFLOPS].prop = prop;
-			deviceProperties[CUDA_DEVICE_MAX_GFLOPS].DeviceId = i;
-		}
-
-		if (GFlops < static_cast<float>(minGFlops))
-		{
-			minGFlops = static_cast<int32_t>(GFlops);
-			deviceProperties[CUDA_DEVICE_MIN_GFLOPS].prop = prop;
-			deviceProperties[CUDA_DEVICE_MIN_GFLOPS].DeviceId = i;
-		}
-	}
-
-	int32_t SelectedDeviceId = -1;
-	switch (mode)
-	{
-	case FIRST_PCI_BUS_ID:
-		SelectedDeviceId = deviceProperties[CUDA_DEVICE_FIRST_PCI_BUS_ID].DeviceId;
-		break;
-	case LAST_PCI_BUS_ID:
-		SelectedDeviceId = deviceProperties[CUDA_DEVICE_LAST_PCI_BUS_ID].DeviceId;
-		break;
-	case MAX_GFLOPS:
-		SelectedDeviceId = deviceProperties[CUDA_DEVICE_MAX_GFLOPS].DeviceId;
-		break;
-	case MIN_GFLOPS:
-		SelectedDeviceId = deviceProperties[CUDA_DEVICE_MIN_GFLOPS].DeviceId;
-		break;
-	case SPECIFIED_DEVICE_ID:
-		SelectedDeviceId = deviceProperties[CUDA_DEVICE_SPECIFIED].DeviceId;
-		break;
-	default:
-		assert(false);
-		break;
-	}
-
-	if (-1 == SelectedDeviceId)
-	{
-		return bResult;
-	}
-
-	if (cudaSetDevice(SelectedDeviceId) != cudaSuccess)
-	{
-		return bResult;
-	}
-
-	mCudaSelectedDeviceId = SelectedDeviceId;
-
-	cudaGetDeviceProperties(&prop, SelectedDeviceId);
-
-	strcpy_s(mGpuInfo.szDeviceName, prop.name);
-
-	prop.kernelExecTimeoutEnabled;
-	uint32_t SmPerMultiproc;
-	if (prop.major == 9999 && prop.minor == 9999)
-	{
-		SmPerMultiproc = 1;
-	}
-	else
-	{
-		SmPerMultiproc = static_cast<uint32_t>(_ConvertSMVer2Cores(prop.major, prop.minor));
-	}
-	mGpuInfo.sm_per_multiproc = static_cast<uint32_t>(SmPerMultiproc);
-	mGpuInfo.clock_rate = static_cast<uint32_t>(prop.clockRate);
-	mGpuInfo.multiProcessorCount = static_cast<uint32_t>(prop.multiProcessorCount);
-	uint64_t KFlops = static_cast<uint64_t>(static_cast<uint32_t>(prop.multiProcessorCount)) * static_cast<uint64_t>(static_cast<uint32_t>(SmPerMultiproc)) * static_cast<uint64_t>(static_cast<uint32_t>(prop.clockRate)) * 2;
-	mGpuInfo.TFlops = static_cast<float>(KFlops) / static_cast<float>(1024 * 1024 * 1024);
-	mbCanPrefetch = prop.concurrentManagedAccess != 0;
-
-	bResult = true;
-	return bResult;
-}
-#endif
 
 void RayTracer::renderSingleRow(uint8_t* backBuffer, size_t width, size_t height, size_t numChannels, size_t y, const Camera& camera, const HittableList& world) noexcept
 {

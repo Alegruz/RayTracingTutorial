@@ -1,3 +1,8 @@
 .vs/
 x64/
 RayTracingTutorial.vcxproj.user
+example.png
+example_cpu.png
+example_gpu.png
+image.ppm
+example_cpu_multi.png
