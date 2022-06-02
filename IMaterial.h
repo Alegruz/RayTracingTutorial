@@ -5,6 +5,15 @@ import Ray;
 
 struct HitRecord;
 
+enum class eMaterialType
+{
+	NONE,
+	LAMBERTIAN,
+	METAL,
+	DIELECTRIC,
+	EMISSIVE
+};
+
 class IMaterial
 {
 public:
@@ -16,4 +25,7 @@ public:
 	virtual ~IMaterial() noexcept = default;
 
 	virtual bool Scatter(const Ray& ray, const HitRecord& hitRecord, Color& outAttenuation, Ray& outScattered) const noexcept = 0;
+
+public:
+	eMaterialType MaterialType = eMaterialType::NONE;
 };

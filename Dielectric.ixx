@@ -38,6 +38,7 @@ private:
 constexpr Dielectric::Dielectric(float indexOfRefraction) noexcept
 	: IndexOfRefraction(indexOfRefraction)
 {
+	MaterialType = eMaterialType::DIELECTRIC;
 }
 
 bool Dielectric::Scatter(const Ray& ray, const HitRecord& hitRecord, Color& outAttenuation, Ray& outScattered) const noexcept

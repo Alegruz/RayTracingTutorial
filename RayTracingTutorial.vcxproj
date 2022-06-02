@@ -90,6 +90,7 @@
     <ClCompile Include="Camera.ixx" />
     <ClCompile Include="Color.ixx" />
     <ClCompile Include="Dielectric.ixx" />
+    <ClCompile Include="Emissive.ixx" />
     <ClCompile Include="HittableList.ixx" />
     <ClCompile Include="IHittable.ixx" />
     <ClCompile Include="Lambertian.ixx" />

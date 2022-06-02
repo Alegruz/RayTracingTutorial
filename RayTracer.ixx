@@ -26,6 +26,7 @@ export module RayTracer;
 import Camera;
 import Color;
 import Dielectric;
+import Emissive;
 import HittableList;
 import IHittable;
 import Lambertian;
@@ -42,29 +43,32 @@ static std::mutex sMutex;
 export class RayTracer final
 {
 public:
-	static constexpr const size_t MAX_BOUND_DEPTH = 5;
+	static constexpr const size_t MAX_BOUND_DEPTH = 50;
 
-	static Color RayColor(const Ray& ray, const IHittable& world, size_t depth = MAX_BOUND_DEPTH) noexcept;
+	static Color RayColor(const Ray& ray, const HittableList& world) noexcept;
 
 public:
-	explicit RayTracer() noexcept = delete;
+	RayTracer() = delete;
 	explicit RayTracer(size_t width, size_t height, size_t numChannels) noexcept;
-	explicit RayTracer(const RayTracer& other) noexcept;
-	explicit RayTracer(RayTracer&& other) noexcept;
-	RayTracer& operator=(const RayTracer& other) noexcept;
-	constexpr RayTracer& operator=(RayTracer&& other) noexcept;
+	RayTracer(const RayTracer& other) = delete;
+	RayTracer(RayTracer&& other) = delete;
+	RayTracer& operator=(const RayTracer& other) = delete;
+	RayTracer& operator=(RayTracer&& other) = delete;
 	~RayTracer() noexcept;
 
 	void Initialize() noexcept;
 	void Render() noexcept;
 
-	static constexpr const size_t SAMPLES_PER_PIXEL = 10;
+	static constexpr const size_t SAMPLES_PER_PIXEL = 500;
 
 private:
 	static void renderSingleRow(uint8_t* backBuffer, size_t width, size_t height, size_t numChannels, size_t y, const Camera& camera, const HittableList& world) noexcept;
 	static void renderSinglePixel(uint8_t* backBuffer, size_t width, size_t height, size_t numChannels, size_t x, size_t y, const Camera& camera, const HittableList& world) noexcept;
 
 	static void createRandomScene(HittableList& outWorld, std::vector<IMaterial*>& outMaterials);
+
+private:
+	static Color rayColorRecursive(const Ray& ray, const HittableList& world, size_t depth = MAX_BOUND_DEPTH) noexcept;
 
 private:
 	// Image
@@ -88,32 +92,9 @@ private:
 #endif
 };
 
-Color RayTracer::RayColor(const Ray& ray, const IHittable& world, size_t depth) noexcept
+Color RayTracer::RayColor(const Ray& ray, const HittableList& world) noexcept
 {
-	HitRecord record;
-
-	if (depth <= 0)
-	{
-		return Color(0.0f, 0.0f, 0.0f);
-	}
-
-	if (world.HasHit(ray, 0.000001f, INFINITY_F, record))
-	{
-		//Point3f target = record.Point + record.Normal + Math::GetRandomUnitVector3f();
-		Ray scattered;
-		Color attenuation;
-		if (record.Material->Scatter(ray, record, attenuation, scattered))
-		{
-			return attenuation * RayColor(scattered, world, depth - 1);
-		}
-		return Color(0.0f, 0.0f, 0.0f);
-		//return 0.5f * RayColor(Ray(record.Point, target - record.Point), world, depth - 1);
-	}
-
-	Point3f unitDirection = GetUnitVector(ray.Direction);
-	float scalar = 0.5f * (unitDirection.Y + 1.0f);
-
-	return Math::Lerp(Color(1.0f, 1.0f, 1.0f), Color(0.5f, 0.7f, 1.0f), scalar);
+	return rayColorRecursive(ray, world, MAX_BOUND_DEPTH);
 }
 
 RayTracer::RayTracer(size_t width, size_t height, size_t numChannels) noexcept
@@ -125,94 +106,6 @@ RayTracer::RayTracer(size_t width, size_t height, size_t numChannels) noexcept
 	, mWorld()
 {
 	assert(mHostBackBuffer);
-}
-
-RayTracer::RayTracer(const RayTracer& other) noexcept
-{
-	if (this != &other)
-	{
-		mWidth = other.mWidth;
-		mHeight = other.mHeight;
-		mNumChannels = other.mNumChannels;
-
-		mHostBackBuffer = reinterpret_cast<uint8_t*>(malloc(mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0])));
-		assert(mHostBackBuffer);
-
-		memcpy(mHostBackBuffer, other.mHostBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-
-		mCamera = other.mCamera;
-
-		mWorld = other.mWorld;
-	}
-}
-
-RayTracer::RayTracer(RayTracer&& other) noexcept
-{
-	if (this != &other)
-	{
-		mWidth = other.mWidth;
-		mHeight = other.mHeight;
-		mNumChannels = other.mNumChannels;
-		mHostBackBuffer = other.mHostBackBuffer;
-
-		mCamera = std::move(other.mCamera);
-		mWorld = std::move(other.mWorld);
-
-		other.mWidth = 0;
-		other.mHeight = 0;
-		other.mNumChannels = 0;
-		other.mHostBackBuffer = nullptr;
-	}
-}
-
-RayTracer& RayTracer::operator=(const RayTracer& other) noexcept
-{
-	if (this != &other)
-	{
-		if (mWidth * mHeight * mNumChannels != other.mWidth * other.mHeight * other.mNumChannels)
-		{
-			if (mHostBackBuffer)
-			{
-				free(mHostBackBuffer);
-			}
-
-			mWidth = other.mWidth;
-			mHeight = other.mHeight;
-			mNumChannels = other.mNumChannels;
-
-			mHostBackBuffer = reinterpret_cast<uint8_t*>(malloc(mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0])));
-			assert(mHostBackBuffer);
-		}
-
-		memcpy(mHostBackBuffer, other.mHostBackBuffer, mWidth * mHeight * mNumChannels * sizeof(mHostBackBuffer[0]));
-
-		mCamera = other.mCamera;
-
-		mWorld = other.mWorld;
-	}
-
-	return *this;
-}
-
-constexpr RayTracer& RayTracer::operator=(RayTracer&& other) noexcept
-{
-	if (this != &other)
-	{
-		mWidth = other.mWidth;
-		mHeight = other.mHeight;
-		mNumChannels = other.mNumChannels;
-		mHostBackBuffer = other.mHostBackBuffer;
-
-		mCamera = std::move(other.mCamera);
-		mWorld = std::move(other.mWorld);
-
-		other.mWidth = 0;
-		other.mHeight = 0;
-		other.mNumChannels = 0;
-		other.mHostBackBuffer = nullptr;
-	}
-
-	return *this;
 }
 
 RayTracer::~RayTracer() noexcept
@@ -323,6 +216,11 @@ void RayTracer::renderSinglePixel(uint8_t* backBuffer, size_t width, size_t heig
 
 void RayTracer::createRandomScene(HittableList& outWorld, std::vector<IMaterial*>& outMaterials)
 {
+	Emissive* SunMaterial = new Emissive(Color(1.0f, 1.0f, 1.0f));
+	outMaterials.push_back(SunMaterial);
+	outWorld.Sun = std::make_shared<Sphere>(Point3f(10.0f, 10.0f, 10.0f), 2.0f, SunMaterial);
+	outWorld.Add(outWorld.Sun);
+
 	Lambertian* groundMaterial = new Lambertian(Color(0.5f, 0.5f, 0.5f));
 	outMaterials.push_back(groundMaterial);
 	outWorld.Add(std::make_shared<Sphere>(Point3f(0.0f, -1000.0f, 0.0f), 1000.0f, groundMaterial));
@@ -378,4 +276,39 @@ void RayTracer::createRandomScene(HittableList& outWorld, std::vector<IMaterial*
 	Metal* material3 = new Metal(Color(0.7f, 0.6f, 0.5f), 0.0f);
 	outMaterials.push_back(material3);
 	outWorld.Add(std::make_shared<Sphere>(Point3f(4.0f, 1.0f, 0.0f), 1.0f, material3));
+}
+
+Color RayTracer::rayColorRecursive(const Ray& ray, const HittableList& world, size_t depth) noexcept
+{
+	HitRecord record;
+
+	if (depth <= 0)
+	{
+		return Color(0.0f, 0.0f, 0.0f);
+	}
+
+	if (world.HasHit(ray, 0.000001f, INFINITY_F, record))
+	{
+		Ray scattered;
+		Color attenuation;
+
+		// If the intersecting material is an emissive material, 
+		// simply return the attenuation
+
+		if (record.Material->Scatter(ray, record, attenuation, scattered))
+		{
+			// Cast a shadow ray
+			// If the closest intersector is the sun, 
+			// and current surface is a lambertian material, 
+			// then simply return the attenuation
+
+			return attenuation * rayColorRecursive(scattered, world, depth - 1);
+		}
+		return Color(0.0f, 0.0f, 0.0f);
+	}
+
+	Point3f unitDirection = GetUnitVector(ray.Direction);
+	float scalar = 0.5f * (unitDirection.Y + 1.0f);
+
+	return Math::Lerp(Color(1.0f, 1.0f, 1.0f), Color(0.5f, 0.7f, 1.0f), scalar);
 }

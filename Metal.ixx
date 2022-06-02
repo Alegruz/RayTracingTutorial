@@ -37,6 +37,7 @@ constexpr Metal::Metal(const Color& albedo, float fuzz) noexcept
 	: Albedo(albedo)
 	, Fuzz(std::min(fuzz, 1.0f))
 {
+	MaterialType = eMaterialType::METAL;
 }
 
 bool Metal::Scatter(const Ray& ray, const HitRecord& hitRecord, Color& outAttenuation, Ray& outScattered) const noexcept

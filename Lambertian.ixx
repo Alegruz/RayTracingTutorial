@@ -30,6 +30,7 @@ public:
 constexpr Lambertian::Lambertian(const Color& albedo) noexcept
 	: Albedo(albedo)
 {
+	MaterialType = eMaterialType::LAMBERTIAN;
 }
 
 bool Lambertian::Scatter(const Ray& ray, const HitRecord& hitRecord, Color& outAttenuation, Ray& outScattered) const noexcept

@@ -6,12 +6,14 @@ module;
 
 export module HittableList;
 
+import Emissive;
 import IHittable;
+import Sphere;
 
 export class HittableList final : public IHittable
 {
 public:
-	//explicit constexpr HittableList() noexcept = default;
+	explicit constexpr HittableList() noexcept = default;
 	//explicit constexpr HittableList(const std::shared_ptr<IHittable>& object) noexcept;
 	//explicit constexpr HittableList(const HittableList& other) noexcept = default;
 	//explicit constexpr HittableList(HittableList&& other) noexcept = default;
@@ -29,6 +31,7 @@ public:
 
 	size_t Size;
 	std::shared_ptr<IHittable> Objects[MAX_OBJECTS];
+	std::shared_ptr<Sphere> Sun;
 };
 
 //constexpr HittableList::HittableList(const std::shared_ptr<IHittable>& object) noexcept
